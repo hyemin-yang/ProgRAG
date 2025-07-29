@@ -1,20 +1,19 @@
-import numpy as np
-import json
 from llm import *
 from prompt_matcher import *
 from utils import *
 from tqdm import tqdm
 import gc
-from gfm_utils import *
-from gfm_text_encoder import *
-from gfm_test import test
-from nbfmodels import *
+from GFM.gfm_utils import *
+from GFM.gfm_text_encoder import *
+from GFM.gfm_test import test
+from GFM.nbfmodels import *
 import pickle
 import ast
-from ENT_PRUNER.predictor import LMPredictor
+from MPNet.predictor import LMPredictor
 from itertools import chain
 import argparse
 import numpy as np
+import os
 
     
 if __name__ == '__main__':
@@ -31,8 +30,8 @@ if __name__ == '__main__':
     parser.add_argument("--webqsp_subgraph_path", type=str, default='./data/webqsp_topic_graph.pickle')
     parser.add_argument("--cwq_subgraph_path", type=str, default='./data/cwq_topic_graph_updated.pickle')
     parser.add_argument("--gfm_path", type = str, default = './ckpt/GFM')
-    parser.add_argument("--lm_path", type=str, default = './ckpt/mpnet_ckpt')
-    parser.add_argument("--rel_ranker_path", type=str, default = './ckpt/REL_PRUNER/joint/final')
+    parser.add_argument("--lm_path", type=str, default = './ckpt/mpnet')
+    parser.add_argument("--rel_ranker_path", type=str, default = './Rel_Retriever')
 
     # LLM related
     parser.add_argument("--is_GPT", action='store_true', default = False)
@@ -54,7 +53,7 @@ if __name__ == '__main__':
     
     ## 3) Load relation ranker & entity ranker 
     GNN_device = args.gnn_device
-    pruner = SentenceBERTPruning(ckpt_path = args.rel_ranker_path, device = args.device, tail_graph = tail_graph, rel_graph = relation_graph, topk = args.topk)
+    pruner = RelationRetriever(ckpt_path = args.rel_ranker_path, device = args.device, tail_graph = tail_graph, rel_graph = relation_graph, topk = args.topk)
     predictor = LMPredictor(GNN_device)
     text_encoder = GTELargeEN(GNN_device)
     
@@ -85,7 +84,7 @@ if __name__ == '__main__':
     au_thres = 1.55 
     k_au = 4
     out_file = f'{args.dataset}.jsonl'
-    
+    total_hit, total_f1 = [], [] 
     
     for inds in tqdm(range(len(dataset))): 
     # for inds in tqdm(ind_list):
@@ -442,6 +441,15 @@ if __name__ == '__main__':
         writer.add_rel(graph_box.get_all_relation_combinations_from_paths(reasoning_paths))
         writer.add_path(reasoning_paths)
         writer.add_qu(all_subqs)
-        write_log(os.path.join(args.output_dir, out_file), dataset, inds, total_original_q, end_point, writer.relation_list, writer.sub_questions)
+        hit, f1 = write_log(os.path.join(args.output_dir, out_file), dataset, inds, total_original_q, end_point, writer.relation_list, writer.sub_questions)
+        total_hit.append(hit)
+        total_f1.append(f1)
         gc.collect()
         torch.cuda.empty_cache()   
+        
+    print("== Eval Results ==")
+    print("EM:", sum(total_hit)/len(total_hit))
+    print("F1:", sum(total_f1)/len(total_f1))
+    print("right:", sum(total_hit))
+    print("false:", len(total_hit)-sum(total_hit))
+    print("#total:", len(total_hit))
