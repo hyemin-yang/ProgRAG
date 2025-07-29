@@ -1,0 +1,447 @@
+import numpy as np
+import json
+from llm import *
+from prompt_matcher import *
+from utils import *
+from tqdm import tqdm
+import gc
+from gfm_utils import *
+from gfm_text_encoder import *
+from gfm_test import test
+from nbfmodels import *
+import pickle
+import ast
+from ENT_PRUNER.predictor import LMPredictor
+from itertools import chain
+import argparse
+import numpy as np
+
+    
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Our_model")
+    parser.add_argument("--dataset", type=str, default='webqsp')
+    parser.add_argument("--device", type=str, default='cuda:0')
+    parser.add_argument("--gnn_device", type=str, default='cuda:0')
+    parser.add_argument("--topk", type=int, default=15)
+    parser.add_argument("--local_iter", type=int, default=2)
+    parser.add_argument("--split", type=str, default='test')
+    parser.add_argument("--return_entity_threshold", type=int, default=20)
+
+  
+    parser.add_argument("--webqsp_subgraph_path", type=str, default='./data/webqsp_topic_graph.pickle')
+    parser.add_argument("--cwq_subgraph_path", type=str, default='./data/cwq_topic_graph_updated.pickle')
+    parser.add_argument("--gfm_path", type = str, default = './ckpt/GFM')
+    parser.add_argument("--lm_path", type=str, default = './ckpt/mpnet_ckpt')
+    parser.add_argument("--rel_ranker_path", type=str, default = './ckpt/REL_PRUNER/joint/final')
+
+    # LLM related
+    parser.add_argument("--is_GPT", action='store_true', default = False)
+    parser.add_argument("--llm_model_path", type=str, default='google/gemma-2-9b-it')
+    parser.add_argument("--is_8bit", action='store_true', default=False)
+    parser.add_argument("--do_uncertainty", action='store_true', default=False)
+    
+    parser.add_argument("--output_dir", type=str, default='output')
+
+    args = parser.parse_args()
+    
+    ## 1) Load data
+    dataset, total_graph, max_iter, id2triple, triple2id = get_dataset(args.dataset, args.split)
+    tail_graph = get_tail_graph(total_graph)
+    relation_graph = get_relation_graph(total_graph)
+
+    ## 2) Load LLM
+    model = LLM(args=args)
+    
+    ## 3) Load relation ranker & entity ranker 
+    GNN_device = args.gnn_device
+    pruner = SentenceBERTPruning(ckpt_path = args.rel_ranker_path, device = args.device, tail_graph = tail_graph, rel_graph = relation_graph, topk = args.topk)
+    predictor = LMPredictor(GNN_device)
+    text_encoder = GTELargeEN(GNN_device)
+    
+    
+    if args.dataset == 'webqsp':
+        with open(args.webqsp_subgraph_path, 'rb') as f:
+            topic_graphs= pickle.load(f)
+        gfm_model = GNNRetriever(entity_model=QueryNBFNet(input_dim=512, hidden_dims=[512, 512, 512]), rel_emb_dim=1024)
+        predictor.load_model(ckt_path= os.path.join(args.lm_path, f'{args.lm_path}/webqsp.mdl'))
+    else:
+        with open(args.cwq_subgraph_path, 'rb') as f:
+            topic_graphs= pickle.load(f)
+        gfm_model = GNNRetriever(entity_model=QueryNBFNet(input_dim=512, hidden_dims=[512, 512, 512, 512, 512, 512]), rel_emb_dim=1024)
+        predictor.load_model(ckt_path= os.path.join(args.lm_path, f'{args.lm_path}/cwq.mdl'))
+
+    
+    state = torch.load(os.path.join(args.lm_path, f'{args.lm_path}/GFM.pth'), map_location="cpu")
+    gfm_model.load_state_dict(state["model"])
+    gfm_model.to(GNN_device)
+   
+
+    hard_selection = False
+    is_topp = True
+    do_entity_len_threshold = True
+    unique_input = False
+    is_dynamic_graph = False
+    total_rel_ent_list = list()
+    au_thres = 1.55 
+    k_au = 4
+    out_file = f'{args.dataset}.jsonl'
+    
+    
+    for inds in tqdm(range(len(dataset))): 
+    # for inds in tqdm(ind_list):
+        total_original_q = dataset[inds]['question']
+        topic_box = dataset[inds]['q_entity']
+        path_map = defaultdict(list)
+        all_subqs = []
+        model.reset_llm_call()
+        
+        # Question decomposition
+        en_qu_dict, filtered_keys = get_first_big_div_Q(model, topic_box, total_original_q, args.dataset)
+        
+        for topic_ent in filtered_keys:
+          
+            kg_data = "None"
+            writer = toybox()
+            graph_box = PathManager()
+            cnt = 0      
+            out_forms = ['object']
+
+            if topic_ent not in relation_graph:
+                gc.collect()
+                torch.cuda.empty_cache()
+                continue
+                
+            if topic_ent not in topic_graphs or topic_ent.startswith('g.'):
+                graph = []
+            else:
+                item = topic_graphs[topic_ent]
+                kg_data = make_gfm_first_input(item, id2triple)
+                kg_data = kg_data.to(GNN_device)
+                kg_data['rel_emb'] = get_emb(kg_data, args.dataset).to(GNN_device)
+                graph = [id2triple[t] for t in item]
+           
+            
+            original_q_box = en_qu_dict[topic_ent]
+            print(original_q_box)
+            if len(original_q_box) == 0:
+                break
+            original_q = original_q_box[0]
+
+            while True:
+                rel_ent_dict, temp_rel_ent_dict, before_rel_ent_dict, not_choosen_answer= dict(), dict(), dict(), set()
+                cnt += 1
+                    
+                if args.dataset == 'webqsp':
+                    sub_Q = original_q
+                elif args.dataset == 'cwq':
+                    sub_Q = original_q
+                    try:
+                        sub_Q = original_q_box[cnt-1]
+                    except:
+                        break
+                    
+                topic_ents = [topic_ent] if type(topic_ent) != list else topic_ent
+                if type(topic_ent) != list:
+                    topic_ent = [topic_ent]
+                     
+                cand_rel, cand_path = pruner.pruning(topic_ent, total_original_q, writer.ent_box)
+
+                if args.dataset == 'webqsp':
+                    out_forms = get_ans_temp(model, sub_Q)
+                    try:
+                        out_forms = ast.literal_eval(out_forms)
+                    except:
+                        out_forms = [out_forms]
+                else:
+                    out_forms = ['object']
+                out_form = out_forms[0]
+
+                if len(cand_rel) > 3:
+                    input_text = rel_prompt_mathcing(args, topic_ent, sub_Q, writer, cand_rel, out_form)
+                    retrieved_rel = model.llm_call(input_text, 500, task='relation', printing=True)
+                    retrieved_rel = [item.strip() for item in retrieved_rel.split(',')]
+                elif len(cand_rel) > 0:
+                    retrieved_rel = cand_rel
+                else:
+                    retrieved_rel = ["None"]
+                writer.add_ent(topic_ent)
+                temp_answer_where_indices = []
+                all_subqs.append(sub_Q)
+                    
+                for iter in range(args.local_iter):
+                    gfm_temp_rel_ent_dict, mpnet_temp_rel_ent_dict = dict(), dict()
+                    gfm_id_temp_rel_ent_dict, mpnet_id_temp_rel_ent_dict= dict(), dict()
+                    gfm_not_id_temp_rel_ent_dict, mpnet_not_id_temp_rel_ent_dict= dict(), dict()
+                    mp_entity_to_triple = dict()
+                    entity2prob = dict()
+                    gfm_avg_entropy = "None"
+                    mp_avg_entropy = "None"
+                    if retrieved_rel != ["None"]:
+                        get_each_rel_end(cand_path, retrieved_rel, mpnet_temp_rel_ent_dict, gfm_temp_rel_ent_dict, graph, writer, mpnet=True, gfm=True)
+                        total_triples = find_suited_trip(cand_path, list(mpnet_temp_rel_ent_dict.keys()))
+                        graph_box.add_triples(total_triples)
+                        
+                        if len(gfm_temp_rel_ent_dict) != 0:
+                            check_cnt = 0
+                            for rel, cand_ent in gfm_temp_rel_ent_dict.items():
+                                count = sum(1 for item in cand_ent if len(item) > 1 and item[1] == '.')
+                                if count == len(cand_ent):
+                                    check_cnt += 1
+                                    gfm_id_temp_rel_ent_dict[rel] = gfm_temp_rel_ent_dict[rel]
+                                else:
+                                    gfm_not_id_temp_rel_ent_dict[rel] = gfm_temp_rel_ent_dict[rel]
+                            # id가 있는 경우
+                            if check_cnt != 0:
+                                id_topic_ent = list(set(value for sublist in gfm_id_temp_rel_ent_dict.values() for value in sublist))
+                                id_topic_ents = [id_topic_ent] if type(id_topic_ent) != list else id_topic_ent
+                                temp_id_cand_rel, cand_path = pruner.pruning(id_topic_ents, total_original_q, writer.ent_box)
+                                gfm_new_temp_rel_ent_dict = dict()
+                                retrieved_rel = temp_id_cand_rel
+                                get_each_rel_end(cand_path, retrieved_rel,  None, gfm_new_temp_rel_ent_dict, graph, writer, mpnet=False, gfm=True)
+                                
+                                target_entity_list = list(set().union(*gfm_new_temp_rel_ent_dict.values()) | set().union(*gfm_not_id_temp_rel_ent_dict.values()))
+                            else:
+                                target_entity_list = list(set().union(*gfm_not_id_temp_rel_ent_dict.values()))
+
+                            temp_retrieved_rel_endpoint_hit = check_hit(dataset[inds]['a_entity'], target_entity_list)
+                            retrieved_rel_endpoint_hit += temp_retrieved_rel_endpoint_hit
+                            reasoning_path = topic_ents[0]
+                            question_dataset = make_gfm_second_input(sub_Q, reasoning_path, topic_ents, target_entity_list, text_encoder, kg_data, encode_path=False)
+                            answer_mask = None
+                            if temp_retrieved_rel_endpoint_hit:
+                                target_entity = list(set(dataset[inds]['a_entity']) & set(target_entity_list))
+                                answer_mask = check_answer_whick_top(kg_data, target_entity)
+                            outputs, temp_target_ent_ranking, entity2prob, gfm_avg_entropy = test(gfm_model, kg_data, question_dataset, temp_retrieved_rel_endpoint_hit, answer_mask, is_topp = is_topp, top_p = 0.9, hard_selection=hard_selection, threshod=0.5, do_entity_len_threshold=do_entity_len_threshold, return_entity_threshold=args.return_entity_threshold, device=GNN_device)
+                            if temp_retrieved_rel_endpoint_hit:
+                                target_ent_ranking = temp_target_ent_ranking.tolist()
+                            
+                            filtered_dict = {key: [val for val in values if val in outputs] for key, values in gfm_not_id_temp_rel_ent_dict.items() if any(val in outputs for val in values)}
+                            if check_cnt != 0:
+                                id_filtered_dict = {key: [val for val in values if val in outputs] for key, values in gfm_new_temp_rel_ent_dict.items() if any(val in outputs for val in values)}
+                                filtered_dict.update(id_filtered_dict)
+
+                        
+                        if len(mpnet_temp_rel_ent_dict) != 0:
+                            check_cnt = 0
+                            for rel, cand_ent in mpnet_temp_rel_ent_dict.items():
+                                count = sum(1 for item in cand_ent if len(item) > 1 and item[1] == '.')
+                                if count == len(cand_ent):
+                                    check_cnt += 1
+                                    mpnet_id_temp_rel_ent_dict[rel] = mpnet_temp_rel_ent_dict[rel]
+                                else:
+                                    mpnet_not_id_temp_rel_ent_dict[rel] = mpnet_temp_rel_ent_dict[rel]
+                            # id가 있는 경우
+                            if check_cnt != 0:
+                                id_topic_ent = list(set(value for sublist in mpnet_id_temp_rel_ent_dict.values() for value in sublist))
+                                id_topic_ents = [id_topic_ent] if type(id_topic_ent) != list else id_topic_ent
+                                temp_id_cand_rel, cand_path = pruner.pruning(id_topic_ents, total_original_q, writer.ent_box)
+                                mpnet_new_temp_rel_ent_dict = dict()
+                                retrieved_rel = temp_id_cand_rel
+                              
+                                get_each_rel_end(cand_path, retrieved_rel, mpnet_new_temp_rel_ent_dict,  None, graph, writer, mpnet=True, gfm=False)
+                                if len(mpnet_new_temp_rel_ent_dict) !=0:
+                                    total_triples = find_suited_trip(cand_path, list(mpnet_new_temp_rel_ent_dict.keys()))
+
+                                    graph_box.add_triples(total_triples)
+
+                            mpnet_input_triples = graph_box.get_all_clean_chains(topic_ents)
+                            
+                            if len(mpnet_input_triples) != 0:
+                                sorted_triples, sorted_scores = predictor.predict(sub_Q, mpnet_input_triples, path_map=None, k=len(mpnet_input_triples), chunk_size=1024)
+                                mpent_topk_triples, mp_entity2prob, mp_avg_entropy = cal_entropy(sorted_scores, sorted_triples)
+                                temp_retrieved_rel_endpoint_hit = check_hit(dataset[inds]['a_entity'], list(mp_entity2prob.keys()))
+                                retrieved_rel_endpoint_hit += temp_retrieved_rel_endpoint_hit
+                                mp_entity_to_triple = {trip[-1] : trip for trip in mpent_topk_triples}
+
+                            
+                                total_score_dict = dict()
+                                for key, value in mp_entity2prob.items():
+                                    if key in entity2prob:
+                                        total_score_dict[key] = value  + entity2prob[key]    
+                                    else:
+                                        total_score_dict[key] = value 
+                               
+                                sorted_dict = dict(sorted(total_score_dict.items(), key=lambda x: x[1], reverse=True))
+                                sorted_cand_ent = list(sorted_dict.keys())
+                                
+                                cand_ent_score = F.softmax(torch.tensor(list(sorted_dict.values())), dim=0).detach().cpu().tolist()
+                                temp_answer_where_indices = [sorted_cand_ent.index(item) for item in dataset[inds]['a_entity'] if item in sorted_cand_ent]
+
+                                topp_list = []
+                                topp_score_list = []
+                                top_p = 0.9
+                                temp_sum = 0
+                                for i, item in enumerate(cand_ent_score):
+                                    temp_sum += item
+                                    topp_list.append(sorted_cand_ent[i])
+                                    topp_score_list.append(item)
+                                    if temp_sum > top_p:
+                                        break
+                                    
+                                min_entity = 10
+                                max_entity = args.return_entity_threshold 
+                                if len(topp_list) < min_entity:
+                                    top_k_cand_ent = sorted_cand_ent[:min_entity]
+                                    top_k_cand_ent_score = cand_ent_score[:min_entity]
+                                elif len(topp_list) > max_entity:
+                                    top_k_cand_ent = topp_list[:max_entity]
+                                    top_k_cand_ent_score = topp_score_list[:max_entity]
+                                else:
+                                    top_k_cand_ent = topp_list
+                                    top_k_cand_ent_score = topp_score_list
+                                
+                               
+                                top_k_cand_ent_score = F.softmax(torch.tensor(top_k_cand_ent_score), dim=0).detach().cpu().tolist()
+   
+                                triplets = []
+                                for tail_entity, ent_score in zip(top_k_cand_ent, top_k_cand_ent_score):
+                                    triplets.append(' '.join(mp_entity_to_triple[tail_entity])+'\t'+f'Candidate entity : ["{mp_entity_to_triple[tail_entity][-1]}"]')
+                                    
+                                input_text = SUBQUESTION_ANSWERING.format(Q=sub_Q + '?', T=triplets)
+                                half_checking = model.llm_call(input_text, 600, task='subcheck', printing=True, get_logits=True)
+                                first_result  = smart_list_parser(half_checking)
+                                half_result = first_result.copy() 
+   
+                                
+                                if args.do_uncertainty : 
+                                    logit = model.logits[1][0].detach().cpu()
+                                    temp_top_k_cand_ent = top_k_cand_ent + ["None"]
+                                    ent_to_idx = {e: model.tokenizer.encode(e, add_special_tokens=False)[0] for e in temp_top_k_cand_ent}
+                                    ent_logits = {e: model.logits[1][0, tid].item() for e, tid in ent_to_idx.items()}
+                                    au, eu = cal_u(list(ent_logits.values()), min(5, len(ent_logits)))
+                                    
+                                    if au >= au_thres and 'None' not in half_result:
+                                        second_half_result = top_k_cand_ent[:k_au]
+                                        half_result += second_half_result
+                                        half_result = set(half_result)
+                                        if 'None' in half_result and len(half_result)>1:
+                                            half_result -= set(['None'])
+                                        half_result = list(half_result) 
+                                        
+                                    
+                                rel_ent_dict = dict()
+                                if half_result != ["None"]:
+                                    rel_ent_dict = defaultdict(set)
+
+                                    for key in half_result:
+                                        entry = mp_entity_to_triple.get(key)
+                                        if entry and len(entry) >= 3:
+                                            relation, obj = entry[1], entry[2]
+                                            rel_ent_dict[relation].add(obj)
+
+                                    # 최종 결과는 list로 변환
+                                    rel_ent_dict = {k: list(v) for k, v in rel_ent_dict.items()}
+
+                                    cand_ent = half_result
+                                    cand_ent1 = list(set().union(*rel_ent_dict.values()))
+                                    option_map = {key : [value] for key, value in mp_entity_to_triple.items()}
+                                    update_path_map(cand_ent1, option_map, path_map)
+                                    left_nodes = set(half_result) - set().union(*rel_ent_dict.values())
+                                    not_choosen_answer |= left_nodes
+                                    
+     
+                    if len(rel_ent_dict) != 0:
+                        end_ent = list(set(chain.from_iterable(rel_ent_dict.values())))
+                        checking = 'next'
+
+                        if cnt == max_iter:
+                            end_point = end_ent
+                            set_box = list(rel_ent_dict.keys())
+                            writer.add_all(all_subqs, set_box, topic_ent)
+                            break
+                    else:
+                        check_backtrack_cnt += 1
+                        if iter == args.local_iter:
+                            break
+                        before_rel_ent_dict = rel_ent_dict
+                        rel_ent_dict = dict()
+                        cand_rel = [x for x in cand_rel if x not in mpnet_temp_rel_ent_dict]
+                        if len(cand_rel) > 3:
+                            input_text = rel_prompt_mathcing(args, topic_ent, sub_Q, writer, cand_rel, out_form)
+                            try:
+                                relation_count += len(cand_rel)
+                                rel_llm_call += 1
+                                retrieved_rel = model.llm_call(input_text, 500, task='relation', printing=True)
+                            except:
+                                retrieved_rel = ["None"]
+                            if retrieved_rel != ["None"]:
+                                retrieved_rel = [item.strip() for item in retrieved_rel.split(',')]
+                                checking = 'reset'
+
+                        elif len(cand_rel) > 0:
+                            retrieved_rel = cand_rel
+                            checking = 'reset'
+                        else:
+                            retrieved_rel = ["None"]
+                        
+                        if type(topic_ent) != list:
+                            _, cand_path = pruner.pruning([topic_ent], total_original_q, writer.ent_box)
+    
+                        else:
+                            _, cand_path = pruner.pruning(topic_ent, total_original_q, writer.ent_box)
+
+                    if checking == 'next':
+                        set_box = list(rel_ent_dict.keys())
+                        writer.add_all(all_subqs, set_box, topic_ent)
+                        topic_ent = end_ent[0] if len(end_ent) == 1 else end_ent
+                        break   
+                
+                if cnt == max_iter or (cnt >= 2 and len(rel_ent_dict) == 0):
+                    break
+                
+        triplets = []
+        totalq_input = []
+        if len(path_map) !=0:
+            final_entity2prob = dict()
+            reasoning_path = topic_box[0]
+            if filtered_keys[-1] in topic_graphs and not filtered_keys[-1].startswith('g.'):
+                reasoning_path = topic_box[0]
+                target_entity_list = list(path_map.keys())
+                question_dataset = make_gfm_second_input(total_original_q, reasoning_path, topic_box, target_entity_list, text_encoder, kg_data, encode_path=True)
+                final_outputs, final_temp_target_ent_ranking, final_entity2prob, final_gfm_avg_entropy = test(gfm_model, kg_data, question_dataset, False, answer_mask, is_topp = is_topp, top_p = 0.9, hard_selection=hard_selection, threshod=0.5, do_entity_len_threshold=do_entity_len_threshold, return_entity_threshold=args.return_entity_threshold, device=GNN_device)
+                    
+            
+            
+            mpnet_input_paths = []
+            for tail, paths in path_map.items():
+                for path in paths:
+                    path_count += 1
+                    mpnet_input_paths.append(path)
+                    
+            
+            sorted_triplets = []
+            sorted_triples, sorted_scores = predictor.predict(total_original_q, mpnet_input_paths, path_map=None, k=len(mpnet_input_paths), chunk_size=1024)
+            mpent_topk_triples, final_mp_entity2prob, final_mp_avg_entropy = cal_entropy(sorted_scores, sorted_triples)
+            ## gfm ## 
+            final_total_score_dict = dict()
+            for key, value in final_mp_entity2prob.items():
+                if key in final_entity2prob:   
+                    final_total_score_dict[key] = value + final_entity2prob[key] 
+                else:
+                    final_total_score_dict[key] = value
+            
+            final_sorted_dict = dict(sorted(final_total_score_dict.items(), key=lambda x: x[1], reverse=True))
+            final_sorted_cand_ent = list(final_sorted_dict.keys())
+
+            for tail in final_sorted_cand_ent:
+                for path in path_map[tail]:
+                    path_count += 1
+                    triplets.append(' '.join(path)+'\t'+f'Candidate entity : ["{tail}"]')
+      
+        
+        #with repacking
+        input_text = GCR_ANSWER_PROMPT.format(Q=total_original_q, T=triplets)
+        half_checking = model.llm_call(input_text, 600, task='subcheck', printing=True, get_logits=True)
+        end_point = smart_list_parser(half_checking)
+        
+        reasoning_paths = []
+        for end in end_point:
+            if end in path_map:
+                reasoning_paths.extend(path_map[end])
+        
+        writer.add_rel(graph_box.get_all_relation_combinations_from_paths(reasoning_paths))
+        writer.add_path(reasoning_paths)
+        writer.add_qu(all_subqs)
+        write_log(os.path.join(args.output_dir, out_file), dataset, inds, total_original_q, end_point, writer.relation_list, writer.sub_questions)
+        gc.collect()
+        torch.cuda.empty_cache()   
