@@ -592,6 +592,7 @@ import openai
 from openai.error import Timeout, RateLimitError, APIConnectionError, APIError
 import time
 
+openai.api_key = "your api key"
 
 def ask_gpt4(prompt):
     for attempt in range(3):
