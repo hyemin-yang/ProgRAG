@@ -121,7 +121,7 @@ if __name__ == '__main__':
            
             
             original_q_box = en_qu_dict[topic_ent]
-            print(original_q_box)
+
             if len(original_q_box) == 0:
                 break
             original_q = original_q_box[0]
@@ -174,7 +174,6 @@ if __name__ == '__main__':
                 else:
                     retrieved_rel = ["None"]
                 writer.add_ent(topic_ent)
-                temp_answer_where_indices = []
                 all_subqs.append(sub_Q)
                     
                 for iter in range(args.local_iter):
@@ -183,8 +182,6 @@ if __name__ == '__main__':
                     gfm_not_id_temp_rel_ent_dict, mpnet_not_id_temp_rel_ent_dict= dict(), dict()
                     mp_entity_to_triple = dict()
                     entity2prob = dict()
-                    gfm_avg_entropy = "None"
-                    mp_avg_entropy = "None"
                     if retrieved_rel != ["None"]:
                         get_each_rel_end(cand_path, retrieved_rel, mpnet_temp_rel_ent_dict, gfm_temp_rel_ent_dict, graph, writer, mpnet=True, gfm=True)
                         total_triples = find_suited_trip(cand_path, list(mpnet_temp_rel_ent_dict.keys()))
@@ -199,7 +196,7 @@ if __name__ == '__main__':
                                     gfm_id_temp_rel_ent_dict[rel] = gfm_temp_rel_ent_dict[rel]
                                 else:
                                     gfm_not_id_temp_rel_ent_dict[rel] = gfm_temp_rel_ent_dict[rel]
-                            # id가 있는 경우
+                            # id
                             if check_cnt != 0:
                                 id_topic_ent = list(set(value for sublist in gfm_id_temp_rel_ent_dict.values() for value in sublist))
                                 id_topic_ents = [id_topic_ent] if type(id_topic_ent) != list else id_topic_ent
@@ -211,18 +208,11 @@ if __name__ == '__main__':
                                 target_entity_list = list(set().union(*gfm_new_temp_rel_ent_dict.values()) | set().union(*gfm_not_id_temp_rel_ent_dict.values()))
                             else:
                                 target_entity_list = list(set().union(*gfm_not_id_temp_rel_ent_dict.values()))
-
-                            temp_retrieved_rel_endpoint_hit = check_hit(dataset[inds]['a_entity'], target_entity_list)
-                            retrieved_rel_endpoint_hit += temp_retrieved_rel_endpoint_hit
+                                
                             reasoning_path = topic_ents[0]
                             question_dataset = make_gfm_second_input(sub_Q, reasoning_path, topic_ents, target_entity_list, text_encoder, kg_data, encode_path=False)
                             answer_mask = None
-                            if temp_retrieved_rel_endpoint_hit:
-                                target_entity = list(set(dataset[inds]['a_entity']) & set(target_entity_list))
-                                answer_mask = check_answer_whick_top(kg_data, target_entity)
-                            outputs, temp_target_ent_ranking, entity2prob, gfm_avg_entropy = test(gfm_model, kg_data, question_dataset, temp_retrieved_rel_endpoint_hit, answer_mask, is_topp = is_topp, top_p = 0.9, hard_selection=hard_selection, threshod=0.5, do_entity_len_threshold=do_entity_len_threshold, return_entity_threshold=args.return_entity_threshold, device=GNN_device)
-                            if temp_retrieved_rel_endpoint_hit:
-                                target_ent_ranking = temp_target_ent_ranking.tolist()
+                            outputs, temp_target_ent_ranking, entity2prob = test(gfm_model, kg_data, question_dataset, temp_retrieved_rel_endpoint_hit, answer_mask, is_topp = is_topp, top_p = 0.9, hard_selection=hard_selection, threshod=0.5, do_entity_len_threshold=do_entity_len_threshold, return_entity_threshold=args.return_entity_threshold, device=GNN_device)
                             
                             filtered_dict = {key: [val for val in values if val in outputs] for key, values in gfm_not_id_temp_rel_ent_dict.items() if any(val in outputs for val in values)}
                             if check_cnt != 0:
@@ -239,7 +229,7 @@ if __name__ == '__main__':
                                     mpnet_id_temp_rel_ent_dict[rel] = mpnet_temp_rel_ent_dict[rel]
                                 else:
                                     mpnet_not_id_temp_rel_ent_dict[rel] = mpnet_temp_rel_ent_dict[rel]
-                            # id가 있는 경우
+                            # id
                             if check_cnt != 0:
                                 id_topic_ent = list(set(value for sublist in mpnet_id_temp_rel_ent_dict.values() for value in sublist))
                                 id_topic_ents = [id_topic_ent] if type(id_topic_ent) != list else id_topic_ent
@@ -250,19 +240,15 @@ if __name__ == '__main__':
                                 get_each_rel_end(cand_path, retrieved_rel, mpnet_new_temp_rel_ent_dict,  None, graph, writer, mpnet=True, gfm=False)
                                 if len(mpnet_new_temp_rel_ent_dict) !=0:
                                     total_triples = find_suited_trip(cand_path, list(mpnet_new_temp_rel_ent_dict.keys()))
-
                                     graph_box.add_triples(total_triples)
 
                             mpnet_input_triples = graph_box.get_all_clean_chains(topic_ents)
                             
                             if len(mpnet_input_triples) != 0:
                                 sorted_triples, sorted_scores = predictor.predict(sub_Q, mpnet_input_triples, path_map=None, k=len(mpnet_input_triples), chunk_size=1024)
-                                mpent_topk_triples, mp_entity2prob, mp_avg_entropy = cal_entropy(sorted_scores, sorted_triples)
-                                temp_retrieved_rel_endpoint_hit = check_hit(dataset[inds]['a_entity'], list(mp_entity2prob.keys()))
-                                retrieved_rel_endpoint_hit += temp_retrieved_rel_endpoint_hit
+                                mpent_topk_triples, mp_entity2prob = cal_entropy(sorted_scores, sorted_triples)
                                 mp_entity_to_triple = {trip[-1] : trip for trip in mpent_topk_triples}
 
-                            
                                 total_score_dict = dict()
                                 for key, value in mp_entity2prob.items():
                                     if key in entity2prob:
@@ -272,9 +258,7 @@ if __name__ == '__main__':
                                
                                 sorted_dict = dict(sorted(total_score_dict.items(), key=lambda x: x[1], reverse=True))
                                 sorted_cand_ent = list(sorted_dict.keys())
-                                
                                 cand_ent_score = F.softmax(torch.tensor(list(sorted_dict.values())), dim=0).detach().cpu().tolist()
-                                temp_answer_where_indices = [sorted_cand_ent.index(item) for item in dataset[inds]['a_entity'] if item in sorted_cand_ent]
 
                                 topp_list = []
                                 topp_score_list = []
@@ -311,7 +295,6 @@ if __name__ == '__main__':
                                 first_result  = smart_list_parser(half_checking)
                                 half_result = first_result.copy() 
    
-                                
                                 if args.do_uncertainty : 
                                     logit = model.logits[1][0].detach().cpu()
                                     temp_top_k_cand_ent = top_k_cand_ent + ["None"]
@@ -338,7 +321,6 @@ if __name__ == '__main__':
                                             relation, obj = entry[1], entry[2]
                                             rel_ent_dict[relation].add(obj)
 
-                                    # 최종 결과는 list로 변환
                                     rel_ent_dict = {k: list(v) for k, v in rel_ent_dict.items()}
 
                                     cand_ent = half_result
@@ -407,20 +389,17 @@ if __name__ == '__main__':
                 reasoning_path = topic_box[0]
                 target_entity_list = list(path_map.keys())
                 question_dataset = make_gfm_second_input(total_original_q, reasoning_path, topic_box, target_entity_list, text_encoder, kg_data, encode_path=True)
-                final_outputs, final_temp_target_ent_ranking, final_entity2prob, final_gfm_avg_entropy = test(gfm_model, kg_data, question_dataset, False, answer_mask, is_topp = is_topp, top_p = 0.9, hard_selection=hard_selection, threshod=0.5, do_entity_len_threshold=do_entity_len_threshold, return_entity_threshold=args.return_entity_threshold, device=GNN_device)
+                final_outputs, final_temp_target_ent_ranking, final_entity2prob = test(gfm_model, kg_data, question_dataset, False, None, is_topp = is_topp, top_p = 0.9, hard_selection=hard_selection, threshod=0.5, do_entity_len_threshold=do_entity_len_threshold, return_entity_threshold=args.return_entity_threshold, device=GNN_device)
                     
-            
-            
             mpnet_input_paths = []
             for tail, paths in path_map.items():
                 for path in paths:
                     path_count += 1
                     mpnet_input_paths.append(path)
                     
-            
             sorted_triplets = []
             sorted_triples, sorted_scores = predictor.predict(total_original_q, mpnet_input_paths, path_map=None, k=len(mpnet_input_paths), chunk_size=1024)
-            mpent_topk_triples, final_mp_entity2prob, final_mp_avg_entropy = cal_entropy(sorted_scores, sorted_triples)
+            mpent_topk_triples, final_mp_entity2prob = cal_entropy(sorted_scores, sorted_triples)
             ## gfm ## 
             final_total_score_dict = dict()
             for key, value in final_mp_entity2prob.items():
@@ -439,7 +418,7 @@ if __name__ == '__main__':
       
         
         #with repacking
-        input_text = GCR_ANSWER_PROMPT.format(Q=total_original_q, T=triplets)
+        input_text = FINAL_ANSWER_PROMPT.format(Q=total_original_q, T=triplets)
         half_checking = model.llm_call(input_text, 600, task='subcheck', printing=True, get_logits=True)
         end_point = smart_list_parser(half_checking)
         
