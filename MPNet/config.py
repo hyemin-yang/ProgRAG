@@ -3,7 +3,7 @@ import argparse
 parser = argparse.ArgumentParser(description='Training Bi-Encoder')
 parser.add_argument('--pretrained-model', default= "microsoft/mpnet-base", type=str, metavar='N',
                     help='path to pretrained model')
-parser.add_argument('--model-dir', default='/home/hyemin/model/my_model/fine-tuning/biencoder/checkpoint', type=str, metavar='N',
+parser.add_argument('--model-dir', default='ckpt', type=str, metavar='N',
                     help='path to model dir')
 parser.add_argument('--max-to-keep', default=5, type=int, metavar='N',
                     help='max number of checkpoints to keep')
@@ -22,13 +22,13 @@ parser.add_argument('--lr', type=float, default=2e-5, #satkgc=2e-5
                     help='learning rate')
 parser.add_argument('--weight_decay', type=float, default=1e-4,
                         help='weight decay')
-parser.add_argument('--train_path', default='/home/hyemin/model/my_model/data/webqsp/train_goldenpath.jsonl')
-parser.add_argument('--train_graph_path', default='/home/hyemin/shared_data/webqsp/total_graph_webqsp.json')
-parser.add_argument('--train_path2', default='/home/hyemin/model/my_model/data/cwq/train_goldenpath.jsonl')
-parser.add_argument('--train_graph_path2', default='/home/hyemin/shared_data/cwq/total_graph_cwq.json')
-parser.add_argument('--triple2id_1', default="/home/hyemin/shared_data/webqsp/webqsp_triple2id.json")
-parser.add_argument('--triple2id_2', default="/home/hyemin/shared_data/cwq/cwq_triple2id.pickle")
-parser.add_argument('--rel2id_path', default="/home/hyemin/shared_data/cwq/rel2id.pkl")
+parser.add_argument('--train_path', default='./data/webqsp/train_goldenpath.jsonl')
+parser.add_argument('--train_graph_path', default='./data/webqsp/total_graph_webqsp.json')
+parser.add_argument('--train_path2', default='./data/cwq/train_goldenpath.jsonl')
+parser.add_argument('--train_graph_path2', default='./data/cwq/total_graph_cwq.json')
+parser.add_argument('--triple2id_1', default="./data/webqsp/webqsp_triple2id.json")
+parser.add_argument('--triple2id_2', default="./data/cwq/cwq_triple2id.pickle")
+parser.add_argument('--rel2id_path', default="./data/cwq/rel2id.pkl")
 parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('-p', '--print-freq', default=50, type=int,
                     metavar='N', help='print frequency (default: 10)')
@@ -44,6 +44,6 @@ parser.add_argument('--warmup', default=100, type=int, metavar='N',
                     help='warmup steps') #default=400
 parser.add_argument('--lr-scheduler', default='linear', type=str,
                     help='Lr scheduler to use')
-parser.add_argument('--output-dir', default='/home/hyemin/model/my_model/MBQA/biencoder/checkpoint', type=str,
+parser.add_argument('--output-dir', default='ckpt', type=str,
                     help='Lr scheduler to use')
 args = parser.parse_args()
