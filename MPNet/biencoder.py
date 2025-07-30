@@ -47,8 +47,7 @@ class CustomBertModel(nn.Module, ABC):
                                     token_type_ids=pos_type_ids_flat)
         pos_emb = pos_emb_flat.view(B, P, -1)  # [B, P, D]
         
-        # 3. Negative 후보 인코딩:
-        # neg_token_ids: [B, N, seq_len] -> flatten 후 인코딩 -> reshape to [B, N, D]
+
         _, N, seq_len = neg_token_ids.shape
         neg_ids_flat = neg_token_ids.view(B * N, seq_len)
         neg_mask_flat = neg_mask.view(B * N, seq_len)
@@ -71,30 +70,6 @@ class CustomBertModel(nn.Module, ABC):
         labels[:, :P] = 1.0
         
         return scores, labels
-    
-    # def forward(self, 
-    #         query_token_ids, query_mask, query_token_type_ids, 
-    #         triple_token_ids, triple_mask, triple_token_type_ids,
-    #         **kwargs) -> dict:
-
-    #     B = query_token_ids.size(0)
-
-    #     query_vector = self._encode(self.query_bert,
-    #                             token_ids=query_token_ids,
-    #                             mask=query_mask,
-    #                             token_type_ids=query_token_type_ids)
-        
-    #     triple_token_ids = triple_token_ids.squeeze(0)
-    #     triple_mask = triple_mask.squeeze(0)
-    #     triple_token_type_ids = triple_token_type_ids.squeeze(0)
-    #     triple_vectors = self._encode(self.target_bert,token_ids=triple_token_ids,mask=triple_mask,token_type_ids=triple_token_type_ids)
-        
-    #     scores = torch.matmul(query_vector, triple_vectors.transpose(0, 1)).squeeze(0)
-    #     scores*=1/self.args.temperature
-        
-        
-    #     return scores
-    
     
     def encode_relation_embedding(self, relation_token_ids, relation_token_type_ids, relation_mask):
         candidate_embs = self._encode(self.target_bert,
