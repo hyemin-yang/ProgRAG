@@ -141,7 +141,7 @@ class BaseNBFNet(nn.Module):
             # Edge dropout in the training mode
             # here we want to remove immediate edges (head, relation, tail) from the edge_index and edge_types
             # to make NBFNet iteration learn non-trivial paths
-            # data = self.remove_easy_edges(data, h_index, t_index, r_index, data.num_relations // 2) # 방금지움
+            # data = self.remove_easy_edges(data, h_index, t_index, r_index, data.num_relations // 2)
             pass
 
         shape = h_index.shape
