@@ -8,9 +8,9 @@ from nbfvariadic import *
 
 def get_emb(temp, dataset): 
     if dataset == 'webqsp':
-        relemb_path = '/home/hyemin/shared_data/webqsp/relation.pth'
+        relemb_path = 'data/webqsp_relation.pth'
     else:
-        relemb_path = '/home/hyemin/shared_data/cwq/relation.pth'
+        relemb_path = 'data/cwq_relation.pth'
     rel_emb = torch.load(relemb_path)
     rel2id = temp['rel2id']
     rels = list(rel2id.keys())
@@ -161,7 +161,7 @@ def load_file(item, id2triple, inv_entity_vocab: dict, inv_rel_vocab: dict) -> d
             "inv_rel_vocab": inv_rel_vocab,
         }
 
-def make_gfm_first_input(item, id2triple): # item : {'Justin Bieber': [3512751, 3777290, 241649, 937262, 3476257]}
+def make_gnn_first_input(item, id2triple):
     kg_result = load_file(item, id2triple, inv_entity_vocab={}, inv_rel_vocab={})
     
     ent2id = kg_result["inv_entity_vocab"]
@@ -180,7 +180,7 @@ def make_gfm_first_input(item, id2triple): # item : {'Justin Bieber': [3512751, 
     
     return kg_data
 
-def make_gfm_second_input(question, path, topic_entity, target_entity, text_encoder, kg_data, encode_path=False):
+def make_gnn_second_input(question, path, topic_entity, target_entity, text_encoder, kg_data, encode_path=False):
     question_entities_masks = []
     supporting_entities_masks = []
     ent2id = kg_data["ent2id"]
@@ -210,58 +210,3 @@ def make_gfm_second_input(question, path, topic_entity, target_entity, text_enco
         ).with_format("torch")
     
     return question_dataset
-
-def check_answer_whick_top(kg_data, target_entity):
-    ent2id = kg_data["ent2id"]
-    num_nodes = kg_data["num_nodes"]
-    supporting_entities_masks = []
-
-    target_entity = list(set(target_entity) & set(ent2id.keys()))
-
-    supporting_entities = [ent2id[x] for x in target_entity]
-    supporting_entities_masks.append(entities_to_mask(supporting_entities, num_nodes))
-    supporting_entities_masks = torch.stack(supporting_entities_masks)
-
-    return supporting_entities_masks
-
-def batch_evaluate(pred, target, limit_nodes=None):
-    num_target = target.sum(dim=-1)
-
-    # answer2query = functional._size_to_index(num_answer)
-    answer2query = torch.repeat_interleave(num_target)
-
-    num_entity = pred.shape[-1]
-
-    # in inductive (e) fb_ datasets, the number of nodes in the graph structure might exceed
-    # the actual number of nodes in the graph, so we'll mask unused nodes
-    if limit_nodes is not None:
-        # print(f"Keeping only {len(limit_nodes)} nodes out of {num_entity}")
-        keep_mask = torch.zeros(num_entity, dtype=torch.bool, device=limit_nodes.device)
-        keep_mask[limit_nodes] = 1
-        # keep_mask = F.one_hot(limit_nodes, num_entity)
-        pred[:, ~keep_mask] = float("-inf")
-
-    order = pred.argsort(dim=-1, descending=True)
-
-    range = torch.arange(num_entity, device=pred.device)
-    ranking = scatter_add(range.expand_as(order), order, dim=-1)
-
-    target_ranking = ranking[target]
-    # unfiltered rankings of all answers
-    order_among_answer = variadic_sort(target_ranking, num_target)[1]
-    order_among_answer = (
-        order_among_answer + (num_target.cumsum(0) - num_target)[answer2query]
-    )
-    ranking_among_answer = scatter_add(
-        variadic_arange(num_target), order_among_answer
-    )
-
-    # filtered rankings of all answers
-    ranking = target_ranking - ranking_among_answer + 1
-    ends = num_target.cumsum(0)
-    starts = ends - num_target
-    hard_mask = multi_slice_mask(starts, ends, ends[-1])
-    # filtered rankings of hard answers
-    ranking = ranking[hard_mask]
-
-    return ranking, target_ranking
