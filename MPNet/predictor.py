@@ -28,17 +28,11 @@ def move_to_cuda(sample, device):
 
 def collate(batch_data, tokenizer):
     pad_token_id = tokenizer.pad_token_id
-
-    # 1) 각 example의 input_ids, token_type_ids를 텐서로 변환
     input_ids_list = [torch.LongTensor(item['triple_token_ids']) for item in batch_data]
     token_type_ids_list = [torch.LongTensor(item['triple_token_type_ids']) for item in batch_data]
 
-    # 2) 최대 길이에 맞춰 pad
-    # pad_sequence: [seq_len] → [batch_size, max_seq_len], batch_first=True
     padded_input_ids = pad_sequence(input_ids_list, batch_first=True, padding_value=pad_token_id)
     padded_token_type_ids = pad_sequence(token_type_ids_list, batch_first=True, padding_value=0)
-
-    # 3) attention mask 생성 (pad가 아닌 위치는 1, pad인 위치는 0)
     attention_mask = (padded_input_ids != pad_token_id).long()
 
     return {
@@ -59,7 +53,7 @@ def encoding_triples(triples, model, tokenizer, device, batch_size=1, ent_prunin
     data_loader = torch.utils.data.DataLoader(
             triple_dataset,
             num_workers=0,
-            batch_size = batch_size,#조정 가능
+            batch_size = batch_size,
             collate_fn=lambda x: collate(x, tokenizer), #collate 수정
             shuffle=False)
     
@@ -131,14 +125,13 @@ class LMPredictor:
             query_vector = query_vector.unsqueeze(0)  # [1, D]
         N = all_triple_embs.size(0)
         
-        # 만약 전체 triple 개수가 chunk_size 이하라면 한 번에 처리
         if N <= chunk_size:
             all_triple_embs = all_triple_embs.to(self.device)
             scores = torch.matmul(query_vector, all_triple_embs.transpose(0, 1)).squeeze(0)  # [N]
             sorted_scores, sorted_indices = torch.sort(scores, descending=True)
             return sorted_scores, sorted_indices
         
-        candidate_list = []  # (score, global_index) 튜플들을 저장할 리스트
+        candidate_list = []  
         start = 0
         while start < N:
             end = min(start + chunk_size, N)
@@ -150,7 +143,6 @@ class LMPredictor:
                 candidate_list.append((score, start + i))
             start = end
 
-        # candidate_list를 점수 내림차순으로 정렬
         sorted_candidates = sorted(candidate_list, key=lambda x: x[0], reverse=True)
         sorted_scores = torch.tensor([score for score, idx in sorted_candidates])
         sorted_indices = torch.tensor([idx for score, idx in sorted_candidates])
@@ -158,36 +150,6 @@ class LMPredictor:
 
     @torch.no_grad()
     def predict(self, query, triples, path_map=None, k=10, chunk_size=128, ent_pruning=True, rel_pruning=False):
-        # query_list = []
-        # if path:
-        #     for t in triples:
-        #         if t[0] in path:
-        #             query = query + ' ' + ' '.join(path[t[0]][0])  # Use one path for the same tail
-        #         query_list.append(query)    
-        # else:
-        #     query_list = [query] * len(triples)  # Ensure query_list is a list of the same query repeated for each triple
-
-        # encoded_query = self.tokenizer(query, add_special_tokens=True, max_length=200,
-        #                                 return_token_type_ids=True, truncation=True, padding=True)
-        
-        # pad_token_id = self.tokenizer.pad_token_id
-        # query_ids = torch.LongTensor(encoded_query['input_ids']).to(self.device)
-        # query_mask = (query_ids != pad_token_id).long().to(self.device)
-        # query_token_type_ids = torch.LongTensor(encoded_query['token_type_ids']).to(self.device)
-        
-        # query_emb = self.model.encode_query(query_token_ids=query_ids, query_mask=query_mask,
-        #                                     query_token_type_ids=query_token_type_ids)['query_vector']
-        # all_triple_embs = encoding_triples(triples, self.model, self.tokenizer, self.device, batch_size=chunk_size)
-        # encoded_query = self.tokenizer(query_list, add_special_tokens=True, max_length=200,
-        #                                 return_token_type_ids=True, truncation=True)
-        
-        # pad_token_id = self.tokenizer.pad_token_id
-        # query_ids = torch.LongTensor(encoded_query['input_ids']).unsqueeze(0).to(self.device)
-        # query_mask = (query_ids != pad_token_id).long().to(self.device)
-        # query_token_type_ids = torch.LongTensor(encoded_query['token_type_ids']).unsqueeze(0).to(self.device)
-        # query_emb = self.model.encode_query(query_token_ids=query_ids,query_mask=query_mask,
-        #                                     query_token_type_ids=query_token_type_ids)['query_vector']
-        # all_triple_embs = encoding_triples(triples, self.model, self.tokenizer, self.device, batch_size=chunk_size)
         if path_map:
             input_triples = []
             for t in triples:
@@ -217,13 +179,11 @@ class LMPredictor:
             
             sorted_triples = [input_triples[i] for i in sorted_indices]
             if ent_pruning:
-                # tail entity가 중복되지 않도록 distinct filtering
-                #distinct_triple_embs = []
                 distinct_triples = []
                 distinct_sorted_scores = []
                 seen_tails = set()
                 for idx, triple in enumerate(sorted_triples):
-                    tail = triple[-1]  # triple의 마지막 요소를 tail로 가정
+                    tail = triple[-1]  
                     if tail not in seen_tails:
                         #distinct_triple_embs.append(all_triple_embs[sorted_indices[idx]])
                         distinct_triples.append(triple)
@@ -234,7 +194,6 @@ class LMPredictor:
                 return distinct_triples, torch.tensor(distinct_sorted_scores) #, distinct_triple_embs
             
             if rel_pruning:
-                # relation이 중복되지 않도록 distinct filtering
                 distinct_triples = []
                 distinct_sorted_scores = []
                 seen_relations = set()
