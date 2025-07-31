@@ -54,7 +54,7 @@ def encoding_triples(triples, model, tokenizer, device, batch_size=1, ent_prunin
             triple_dataset,
             num_workers=0,
             batch_size = batch_size,
-            collate_fn=lambda x: collate(x, tokenizer), #collate 수정
+            collate_fn=lambda x: collate(x, tokenizer),
             shuffle=False)
     
     triple_tensor_list = []
