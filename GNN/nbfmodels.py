@@ -541,7 +541,7 @@ class QueryGNN(nn.Module):
         )
         h_index, t_index, r_index = batch.unbind(-1)
         # to make NBFNet iteration learn non-trivial paths
-        # data = self.entity_model.remove_easy_edges(data, h_index, t_index, r_index) 방금지움
+        # data = self.entity_model.remove_easy_edges(data, h_index, t_index, r_index)
 
         score = self.entity_model(data, relation_representations, batch)
 
