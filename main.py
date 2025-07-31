@@ -138,11 +138,11 @@ if __name__ == '__main__':
 
                     if len(en_qu_dict) != 1 and cnt == 1:
                         input_text = first_prompt_matching(cnt, original_q, topic_ent, writer)
-                        sub_Qs = smart_list_parser(gemma_model.llm_call(input_text, 100, task='firstQ', printing=True))
+                        sub_Qs = smart_list_parser(model.llm_call(input_text, 100, task='firstQ', printing=True))
                         original_q_box = sub_Qs
                     elif len(en_qu_dict) == 1 and len(original_q_box) == 1 and cnt == 1:
                         input_text = first_prompt_matching(cnt, original_q, topic_ent, writer)
-                        sub_Qs = smart_list_parser(gemma_model.llm_call(input_text, 100, task='firstQ', printing=True))
+                        sub_Qs = smart_list_parser(model.llm_call(input_text, 100, task='firstQ', printing=True))
                         original_q_box = sub_Qs
                         
                     try:
