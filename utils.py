@@ -479,12 +479,11 @@ def update_path_map(mapping_answer, option_map, path_map):
                 path_map[t[-1]].append(t)
 
 def extract_entity_question_chain(text):
-    # Return 이후의 첫 번째 블록만 추출
     parts = re.split(r"\bReturn:", text)
     if len(parts) < 2:
-        return {}  # Return이 없으면 빈 딕셔너리 반환
+        return {} 
  
-    text = parts[1]  # 첫 번째 Return 이후 블록만 사용
+    text = parts[1]  
     lines = text.strip().split('\n')
  
     sub_qs = []
@@ -503,16 +502,16 @@ def extract_entity_question_chain(text):
  
     result = defaultdict(list)
     for i, (entity, question) in enumerate(zip(entities, sub_qs)):
-        entity = entity.strip().strip('"').strip("'")  # 작은 따옴표와 큰 따옴표 모두 제거
+        entity = entity.strip().strip('"').strip("'") 
         question = question.strip()
  
         if not entity:
             if i > 0:
-                prev_entity = entities[i - 1].strip().strip('"').strip("'")  # 작은 따옴표와 큰 따옴표 모두 제거
+                prev_entity = entities[i - 1].strip().strip('"').strip("'") 
                 result[prev_entity].append(question)
         elif re.fullmatch(r"\[ANS\d+\]", entity):
             if i > 0:
-                prev_entity = entities[i - 1].strip().strip('"').strip("'")  # 작은 따옴표와 큰 따옴표 모두 제거
+                prev_entity = entities[i - 1].strip().strip('"').strip("'") 
                 result[prev_entity].append(question)
         else:
             result[entity].append(question)
