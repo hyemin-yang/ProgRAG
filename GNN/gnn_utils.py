@@ -8,9 +8,9 @@ from nbfvariadic import *
 
 def get_emb(temp, dataset): 
     if dataset == 'webqsp':
-        relemb_path = 'data/webqsp_relation.pth'
+        relemb_path = 'data/webqsp/relation.pth'
     else:
-        relemb_path = 'data/cwq_relation.pth'
+        relemb_path = 'data/cwq/relation.pth'
     rel_emb = torch.load(relemb_path)
     rel2id = temp['rel2id']
     rels = list(rel2id.keys())
