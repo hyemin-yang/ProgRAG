@@ -87,7 +87,7 @@ def make_topic2graph(dataset):
             cwq_graph[k] = list()
         cwq_graph[k] += [triple2id[triplet] for triplet in v]
         
-    with open(f'{dataset}_topic_graph.pickle', mode='wb') as f:
+    with open(f'/data/{dataset}/{dataset}_topic_graph.pickle', mode='wb') as f:
         pickle.dump(cwq_graph, f)
 
 dataset = 'cwq'
