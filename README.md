@@ -1,5 +1,5 @@
 # ProgRAG: Hallucination-Resistant Progressive Retrieval and Reasoning over Knowledge Graphs
-<img width="4335" height="2429" alt="model" src="https://github.com/user-attachments/assets/109c2dd1-9c31-46f5-a496-1b1eab7d3add" />
+![model1](https://github.com/user-attachments/assets/dfcd36eb-fb31-4cf0-8d1c-5711777f1296)
 
 ---
 # How to run
