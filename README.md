@@ -39,8 +39,6 @@ python3 GNN/gnn_train.py
 python3 MPNet/[dataset].sh 
 ```
 
-📌 Note: Preprocessed datasets and checkpoints will be publicly available soon.
-
 
 ## 3) Run
 ```
