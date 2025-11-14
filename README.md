@@ -1,8 +1,10 @@
 # [AAAI 2026] ProgRAG: Hallucination-Resistant Progressive Retrieval and Reasoning over Knowledge Graphs
+Codes for the paper titled ["ProgRAG: Hallucination-Resistant Progressive Retrieval and Reasoning over Knowledge Graphs"](https://arxiv.org/pdf/2511.10240), published in the 40th Annual AAAI Conference on Artificial Intelligence (AAAI'2026).
+
+---
 
 ![model](source/model.png)
 
-Codes for the paper titled ["Hallucination-Resistant Progressive Retrieval and Reasoning over Knowledge Graphs"](https://arxiv.org/pdf/2511.10240), published in the 40th Annual AAAI Conference on Artificial Intelligence (AAAI'2026).
 ---
 # How to run
 ## 1) Installation
