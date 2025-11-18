@@ -2,7 +2,7 @@ import torch
 from torch import distributed as dist
 from torch_scatter import scatter_add, scatter_max, scatter_mean
 import os
-from nbfvariadic import *
+from .nbfvariadic import *
 
 def get_rel_emb(temp, dataset): 
     if dataset == 'webqsp':
