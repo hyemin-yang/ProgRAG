@@ -3,14 +3,34 @@ import torch
 import json
 import pickle
 from tqdm import tqdm
-
-from src.config.emb import load_yaml
-from src.dataset.emb import EmbInferDataset
-
+import pydantic
+import yaml
 import torch
 import torch.nn.functional as F
-
 from transformers import AutoModel, AutoTokenizer
+
+
+
+class EnvYaml(pydantic.BaseModel):
+    num_threads: int
+    seed: int
+
+class TextEncoderYaml(pydantic.BaseModel):
+    name: str
+
+class EmbYaml(pydantic.BaseModel):
+    env: EnvYaml
+    entity_identifier_file: str
+    text_encoder: TextEncoderYaml
+    
+def load_yaml(config_file):
+    with open(config_file) as f:
+        yaml_data = yaml.load(f, Loader=yaml.loader.SafeLoader)
+
+    task = yaml_data.pop('task')
+    assert task == 'emb'
+    
+    return EmbYaml(**yaml_data).model_dump()
 
 class GTELargeEN:
     def __init__(self,
