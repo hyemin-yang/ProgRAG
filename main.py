@@ -25,22 +25,23 @@ if __name__ == '__main__':
     parser.add_argument("--local_iter", type=int, default=2)
     parser.add_argument("--split", type=str, default='test')
     parser.add_argument("--return_entity_threshold", type=int, default=20)
+    parser.add_argument("--return_entity_min_threshold", type=int, default=10)
 
-  
-    parser.add_argument("--webqsp_subgraph_path", type=str, default='./data/webqsp_topic_graph.pickle')
-    parser.add_argument("--cwq_subgraph_path", type=str, default='./data/cwq_topic_graph_updated.pickle')
+    parser.add_argument("--webqsp_subgraph_path", type=str, default='./data/graphs/webqsp_topic_graph.pickle')
+    parser.add_argument("--cwq_subgraph_path", type=str, default='./data/graphs/cwq_topic_graph_updated.pickle')
     parser.add_argument("--gnn_path", type = str, default = './ckpt/GNN')
     parser.add_argument("--lm_path", type=str, default = './ckpt/mpnet')
-    parser.add_argument("--rel_ranker_path", type=str, default = './Rel_Retriever')
+    parser.add_argument("--rel_ranker_path", type=str, default = './ckpt/sbert')
 
     # LLM related
     parser.add_argument("--is_GPT", action='store_true', default = False)
     parser.add_argument("--llm_model_path", type=str, default='google/gemma-2-9b-it')
-    parser.add_argument("--is_8bit", action='store_true', default=False)
+    parser.add_argument("--gpt_model", type=str, default='gpt-4o-mini')
+    parser.add_argument("--api_key", type=str, default='your api key')
     parser.add_argument("--do_uncertainty", action='store_true', default=False)
-    
+    parser.add_argument("--au_thres", type=float, default=1.55)
+    parser.add_argument("--k_au", type=int, default=4) 
     parser.add_argument("--output_dir", type=str, default='output')
-
     args = parser.parse_args()
     
     ## 1) Load data
@@ -62,27 +63,19 @@ if __name__ == '__main__':
         with open(args.webqsp_subgraph_path, 'rb') as f:
             topic_graphs= pickle.load(f)
         gnn_model = GNNRetriever(entity_model=QueryNBFNet(input_dim=512, hidden_dims=[512, 512, 512]), rel_emb_dim=1024)
-        predictor.load_model(ckt_path= os.path.join(args.lm_path, f'{args.lm_path}/webqsp.mdl'))
+        predictor.load_model(ckt_path= f'{args.lm_path}/webqsp.mdl')
     else:
         with open(args.cwq_subgraph_path, 'rb') as f:
             topic_graphs= pickle.load(f)
         gnn_model = GNNRetriever(entity_model=QueryNBFNet(input_dim=512, hidden_dims=[512, 512, 512, 512, 512, 512]), rel_emb_dim=1024)
-        predictor.load_model(ckt_path= os.path.join(args.lm_path, f'{args.lm_path}/cwq.mdl'))
+        predictor.load_model(ckt_path= f'{args.lm_path}/cwq.mdl')
 
     
-    state = torch.load(os.path.join(args.lm_path, f'{args.lm_path}/GNN.pth'), map_location="cpu")
+    state = torch.load(f'{args.gnn_path}/{args.dataset}/GNN.pth', map_location="cpu")
     gnn_model.load_state_dict(state["model"])
     gnn_model.to(GNN_device)
    
     ## 4) initial setting
-    hard_selection = False
-    is_topp = True
-    do_entity_len_threshold = True
-    unique_input = False
-    is_dynamic_graph = False
-    total_rel_ent_list = list()
-    au_thres = 1.55 
-    k_au = 4
     out_file = f'{args.dataset}.jsonl'
     total_hit, total_f1 = [], [] 
 
@@ -92,7 +85,6 @@ if __name__ == '__main__':
         topic_box = dataset[inds]['q_entity']
         path_map = defaultdict(list)
         all_subqs = []
-        model.reset_llm_call()
         
         # Question decomposition
         en_qu_dict, filtered_keys = get_first_big_div_Q(model, topic_box, total_original_q, args.dataset)
@@ -128,7 +120,7 @@ if __name__ == '__main__':
 
             #start sub-question answering
             while True:
-                rel_ent_dict, temp_rel_ent_dict, before_rel_ent_dict, not_choosen_answer= dict(), dict(), dict(), set()
+                rel_ent_dict = dict()
                 cnt += 1
                     
                 if args.dataset == 'webqsp':
@@ -171,7 +163,6 @@ if __name__ == '__main__':
                 if len(cand_rel) > 3:
                     input_text = rel_prompt_mathcing(args, topic_ent, sub_Q, writer, cand_rel, out_form)
                     retrieved_rel = model.llm_call(input_text, 500, task='relation', printing=True)
-                    retrieved_rel = [item.strip() for item in retrieved_rel.split(',')]
                 elif len(cand_rel) > 0:
                     retrieved_rel = cand_rel
                 else:
@@ -212,7 +203,6 @@ if __name__ == '__main__':
                                 target_entity_list = list(set().union(*gnn_new_temp_rel_ent_dict.values()) | set().union(*gnn_not_id_temp_rel_ent_dict.values()))
                             else:
                                 target_entity_list = list(set().union(*gnn_not_id_temp_rel_ent_dict.values()))
-                                
                             reasoning_path = topic_ents[0]
                             question_dataset = make_gnn_second_input(sub_Q, reasoning_path, topic_ents, target_entity_list, text_encoder, kg_data, encode_path=False)
                             outputs, entity2prob = test(gnn_model, kg_data, question_dataset, device=GNN_device)
@@ -248,9 +238,10 @@ if __name__ == '__main__':
                             mpnet_input_triples = graph_box.get_all_clean_chains(topic_ents)
                             
                             if len(mpnet_input_triples) != 0:
+
                                 sorted_triples, sorted_scores = predictor.predict(sub_Q, mpnet_input_triples, path_map=None, k=len(mpnet_input_triples), chunk_size=1024)
-                                mpent_topk_triples, mp_entity2prob = cal_entropy(sorted_scores, sorted_triples)
-                                mp_entity_to_triple = {trip[-1] : trip for trip in mpent_topk_triples}
+                                mp_entity2prob = triple2prob(sorted_scores, sorted_triples)
+                                mp_entity_to_triple = {trip[-1] : trip for trip in sorted_triples}
 
                                 total_score_dict = dict()
                                 for key, value in mp_entity2prob.items():
@@ -274,7 +265,7 @@ if __name__ == '__main__':
                                     if temp_sum > top_p:
                                         break
                                     
-                                min_entity = 10
+                                min_entity = args.return_entity_min_threshold
                                 max_entity = args.return_entity_threshold 
                                 if len(topp_list) < min_entity:
                                     top_k_cand_ent = sorted_cand_ent[:min_entity]
@@ -294,7 +285,7 @@ if __name__ == '__main__':
                                     triplets.append(' '.join(mp_entity_to_triple[tail_entity])+'\t'+f'Candidate entity : ["{mp_entity_to_triple[tail_entity][-1]}"]')
                                     
                                 input_text = SUBQUESTION_ANSWERING.format(Q=sub_Q + '?', T=triplets)
-                                half_checking = model.llm_call(input_text, 600, task='subcheck', printing=True, get_logits=True)
+                                half_checking = model.llm_call(input_text, 600, task='subcheck', printing=True)
                                 first_result  = smart_list_parser(half_checking)
                                 half_result = first_result.copy() 
    
@@ -305,8 +296,8 @@ if __name__ == '__main__':
                                     ent_logits = {e: model.logits[1][0, tid].item() for e, tid in ent_to_idx.items()}
                                     au, eu = cal_u(list(ent_logits.values()), min(5, len(ent_logits)))
                                     
-                                    if au >= au_thres and 'None' not in half_result:
-                                        second_half_result = top_k_cand_ent[:k_au]
+                                    if au >= args.au_thres and 'None' not in half_result:
+                                        second_half_result = top_k_cand_ent[:args.k_au]
                                         half_result += second_half_result
                                         half_result = set(half_result)
                                         if 'None' in half_result and len(half_result)>1:
@@ -329,10 +320,7 @@ if __name__ == '__main__':
                                     cand_ent = half_result
                                     cand_ent1 = list(set().union(*rel_ent_dict.values()))
                                     option_map = {key : [value] for key, value in mp_entity_to_triple.items()}
-                                    update_path_map(cand_ent1, option_map, path_map)
-                                    left_nodes = set(half_result) - set().union(*rel_ent_dict.values())
-                                    not_choosen_answer |= left_nodes
-                                    
+                                    update_path_map(cand_ent1, option_map, path_map)                                    
      
                     if len(rel_ent_dict) != 0:
                         end_ent = list(set(chain.from_iterable(rel_ent_dict.values())))
@@ -347,14 +335,11 @@ if __name__ == '__main__':
                         check_backtrack_cnt += 1
                         if iter == args.local_iter:
                             break
-                        before_rel_ent_dict = rel_ent_dict
                         rel_ent_dict = dict()
                         cand_rel = [x for x in cand_rel if x not in mpnet_temp_rel_ent_dict]
                         if len(cand_rel) > 3:
                             input_text = rel_prompt_mathcing(args, topic_ent, sub_Q, writer, cand_rel, out_form)
                             try:
-                                relation_count += len(cand_rel)
-                                rel_llm_call += 1
                                 retrieved_rel = model.llm_call(input_text, 500, task='relation', printing=True)
                             except:
                                 retrieved_rel = ["None"]
@@ -397,12 +382,11 @@ if __name__ == '__main__':
             mpnet_input_paths = []
             for tail, paths in path_map.items():
                 for path in paths:
-                    path_count += 1
                     mpnet_input_paths.append(path)
                     
             sorted_triplets = []
             sorted_triples, sorted_scores = predictor.predict(total_original_q, mpnet_input_paths, path_map=None, k=len(mpnet_input_paths), chunk_size=1024)
-            mpent_topk_triples, final_mp_entity2prob = cal_entropy(sorted_scores, sorted_triples)
+            final_mp_entity2prob = triple2prob(sorted_scores, sorted_triples)
             ## gnn ## 
             final_total_score_dict = dict()
             for key, value in final_mp_entity2prob.items():
@@ -416,13 +400,12 @@ if __name__ == '__main__':
 
             for tail in final_sorted_cand_ent:
                 for path in path_map[tail]:
-                    path_count += 1
                     triplets.append(' '.join(path)+'\t'+f'Candidate entity : ["{tail}"]')
       
         
         #with repacking
         input_text = FINAL_ANSWER_PROMPT.format(Q=total_original_q, T=triplets)
-        half_checking = model.llm_call(input_text, 600, task='subcheck', printing=True, get_logits=True)
+        half_checking = model.llm_call(input_text, 600, task='subcheck', printing=True)
         end_point = smart_list_parser(half_checking)
         
         reasoning_paths = []
