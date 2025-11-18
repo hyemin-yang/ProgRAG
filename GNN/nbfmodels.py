@@ -4,8 +4,8 @@ import torch
 import copy
 from torch_scatter import scatter_add
 from torch_geometric.data import Data
-from nbflayer import *
-from nbftasks import *
+from .nbflayer import *
+from .nbftasks import *
 
 class BaseNBFNet(nn.Module):
     def __init__(
