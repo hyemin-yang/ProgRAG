@@ -3,56 +3,68 @@ import torch
 import torch.nn as nn
 from utils import *
 import numpy as np
-from prompts import PROMPT_MULTI_ENT
+from prompts import *
 
-
+ 
 class LLM(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.device = args.device
-        self.model = AutoModelForCausalLM.from_pretrained(args.llm_model_path, cache_dir='/home/huggingface').to(args.device)
-        #self.model = AutoModelForCausalLM.from_pretrained(args.llm_model_path, cache_dir='/home/huggingface', load_in_8bit = True, device_map="cuda:0")
-        self.tokenizer = AutoTokenizer.from_pretrained(args.llm_model_path, cache_dir='/home/huggingface')
-        self.logits = None  
-        self.out_tokens = None
-    def llm_call(self, input_text, max_new_token, printing=False, sub_Q=False,  get_logits=False):
-        with torch.no_grad():
-            input_ids = self.tokenizer(input_text, return_tensors="pt").to(self.device)
-            outputs = self.model.generate(input_ids=input_ids['input_ids'], attention_mask=input_ids['attention_mask'], max_new_tokens=max_new_token, pad_token_id=self.tokenizer.eos_token_id, output_scores=True, return_dict_in_generate=True)
-            text = self.tokenizer.decode(outputs.sequences[0][input_ids['input_ids'].shape[1]:], skip_special_tokens=True)
-            self.logits = outputs.scores
-            self.out_tokens = np.array(outputs.sequences[0][input_ids['input_ids'].shape[1]:].tolist())
-            
+        self.is_GPT = args.is_GPT
+        self.logits = 0
+        self.outputs = 'None'
+        self.input_ids = 'None'
+        self.args = args
+
+        if not self.is_GPT:
+            self.tokenizer = AutoTokenizer.from_pretrained(args.llm_model_path, cache_dir='/home/huggingface')
+            self.model = AutoModelForCausalLM.from_pretrained(args.llm_model_path, cache_dir='/home/huggingface', device_map=self.device)
+        else:
+            self.model = 'GPT'
+
+    def llm_call(self, input_text, max_new_token, task, printing=False):
+        if not self.is_GPT:
+            with torch.no_grad():
+                self.input_ids = self.tokenizer(input_text, return_tensors="pt").to(self.device)
+                self.outputs = self.model.generate(input_ids=self.input_ids['input_ids'], attention_mask=self.input_ids['attention_mask'], max_new_tokens=max_new_token, pad_token_id=self.tokenizer.eos_token_id, output_scores=True, return_dict_in_generate=True)
+                text = self.tokenizer.decode(self.outputs.sequences[0][self.input_ids['input_ids'].shape[1]:], skip_special_tokens=True)
+                self.logits = self.outputs.scores
+
+            if task in ['Total_Q', 'tog_relation']:
+                pass
+            elif task in ['subcheck', 'template', 'subcheck1']:
+                text = text.split('\n')[0].strip()
+            elif task == 'new_totalcheck':
+                text = text.splitlines()
+            else:
+                try:
+                    text = text.split('Return')[1].split('\n')[0].strip()[1:].strip()
+                except:
+                    text = "None"
+                if task in ['relation']:
+                    text = [item.strip() for item in text.split(',')]
+
+        else:
+            self.outputs, _ = ask_gpt4(input_text, self.args)
+            if task in ['template', 'subcheck', 'subcheck1']:
+                if self.outputs.startswith('```python'):
+                    match = re.search(r'\[.*?\]', self.outputs)
+                    self.outputs = match.group(0) if match else None
+                text = self.outputs
+            elif task in ['relation']:
+                try:
+                    text = self.outputs.split('Return')[1].split('\n')[0].strip()[1:].strip()
+                    text = [item.strip() for item in text.split(',')]
+                except:
+                    text = self.outputs
+            else:
+                text = self.outputs
+        
         if printing:
             print(text)
-        if sub_Q:
-            
-            start = text.find('[')
-            end = text.find(']')
-            text_list =  smart_list_parser(text[start:end+1])
-        
-            if get_logits:
-                tokens = outputs.sequences[0][input_ids['input_ids'].shape[1]:]
-                top_scores, top_indices = torch.topk(self.logits[1][0], k=20)
-                scores_tok20 = []
-                for s, i in zip(top_scores, top_indices):
-                    score = round(float(s.item()),3)
-                    scores_tok20.append([score, self.tokenizer.decode(i)])
 
-                if 7999 in tokens and 2074 in tokens:
-                    ind = torch.where(tokens==7999)
-                    start_idx = ind[0].tolist()[0]
-                    start_idx +=1
-                    ind = torch.where(tokens==2074)
-                    end_idx = ind[0].tolist()[0]
-                else:
-                    start_idx, end_idx = 1, len(self.logits)-1
-                return text_list, start_idx, end_idx, scores_tok20
-            return text_list
-        
-        if 'Return :' in text:
-            text = text.split('Return :')[1].strip()
         return text
+
     
     def get_first_big_div_Q(self, topic_box, total_original_q, dataset):
         is_printing = True
@@ -77,11 +89,10 @@ class LLM(nn.Module):
  
         return en_qu_dict, filtered_keys
  
-
     def get_ans_temp(self, sub_Q):
         input_text = ANSWER_TEMPLATE.format(Q=sub_Q)
         out_form = self.llm_call(input_text, 10, printing=True)
         
         return out_form
-    
+
     
