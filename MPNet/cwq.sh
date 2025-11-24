@@ -19,7 +19,7 @@ python3 -u train.py \
 --pooling mean \
 --train_path "/data/cwq/train_goldenpath.jsonl" \
 --train_graph_path "/data/cwq/total_graph_cwq.jsonl" \
---triple2id_1 "/data/cwq/cwq_triple2id.pickle" \
+--triple2id_1 "/data/cwq/cwq_triple2id.pkl" \
 --batch_size 1 \
 --print-freq 1000 \
 --max_num_neg 50 \
