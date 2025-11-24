@@ -194,15 +194,15 @@ def new_load_data(path, graph_path, path2=None, graph_path2=None):
 
 
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 device = 'cuda'
 DATA = 'webqsp'
 
-model_save_path = "/REL_RETRIEVER"
-gold_path = "/data/webqsp/train_goldenpath.jsonl"
-graph_path = "/data/webqsp/total_graph_webqsp.jsonl"
-gold_path2 = "/data/cwq/train_goldenpath.jsonl"
-graph_path2 = "/data/cwq/total_graph_cwq.jsonl"
+model_save_path = "./ckpt/sbert"
+gold_path = "./data/webqsp/train_goldenpath.jsonl"
+graph_path = "./data/webqsp/total_graph_webqsp.jsonl"
+gold_path2 = "./data/cwq/train_goldenpath.jsonl"
+graph_path2 = "./data/cwq/total_graph_cwq.jsonl"
 
 train_examples, valid_examples= new_load_data(gold_path, graph_path, gold_path2, graph_path2)
 train_dataset = Dataset.from_dict(train_examples)
@@ -264,19 +264,10 @@ trainer = CrossEncoderTrainer(
 trainer.train()
 
 # Save the model
-final_output_dir = f"{model_save_path}/final"
-model.save_pretrained(final_output_dir)
+model.save_pretrained(model_save_path)
 
 # Optionally, push the model to Hugging Face Hub
 # try:
 #     model.push_to_hub("crossencoder-webqsp")
 # except Exception as e:
 #     logging.error(f"Error uploading model to the Hugging Face Hub: {e}")
-
-
-
-
-
-
-
-
