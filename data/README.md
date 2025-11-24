@@ -4,8 +4,8 @@ The Entity Scorer module requires pretrained **relation embedding files**.
 
 | Dataset | File                  |
 | ------- | --------------------- |
-| WebQSP  | `webqsp/relation.pth` |
-| CWQ     | `cwq/relation.pth`    |
+| WebQSP  | `webqsp/webqsp_relation.pth` |
+| CWQ     | `cwq/cwq_relation.pth`    |
 
 
 
