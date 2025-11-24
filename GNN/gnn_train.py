@@ -127,7 +127,7 @@ return_metrics = ['mrr', 'hits@1', 'hits@2', 'hits@3', 'hits@5', 'hits@10', 'hit
 text_encoder = GTELargeEN(device)
 
 import pickle
-with open(f'/data/{dataset_name}/{dataset_name}_triple2id.pickle', 'rb') as f:
+with open(f'/data/{dataset_name}/{dataset_name}_triple2id.pkl', 'rb') as f:
     triple2id = pickle.load(f)
 id2triple = {v : k for k, v in triple2id.items()}
 
