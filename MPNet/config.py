@@ -28,7 +28,6 @@ parser.add_argument('--train_path2', default='./data/cwq/train_goldenpath.jsonl'
 parser.add_argument('--train_graph_path2', default='./data/cwq/total_graph_cwq.jsonl')
 parser.add_argument('--triple2id_1', default="./data/webqsp/webqsp_triple2id.pkl")
 parser.add_argument('--triple2id_2', default="./data/cwq/cwq_triple2id.pkl")
-parser.add_argument('--rel2id_path', default="./data/cwq/rel2id.pkl")
 parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('-p', '--print-freq', default=50, type=int,
                     metavar='N', help='print frequency (default: 10)')
