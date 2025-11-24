@@ -34,7 +34,7 @@ def make_total_graph(dataset):
     
     triple2id = {trip : i for i, trip in enumerate(temp_list)}
 
-    with open(f'/data/{dataset}{dataset}_triple2id.pkl', 'wb') as f:
+    with open(f'/data/{dataset}/{dataset}{dataset}_triple2id.pkl', 'wb') as f:
         pickle.dump(triple2id,f)
 
 
