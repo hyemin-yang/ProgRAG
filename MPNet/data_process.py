@@ -110,7 +110,7 @@ def find_triple(graph, e1, e2, id2triple):
         return triples
     return {}
 
-def split_path(paths, triple2id): #broken = [path1, path2,...] (path1 = [(t1),(t2),...]), gold_ids, golden_ent_ids(중간 노드랑, 끝 노드만)
+def split_path(paths, triple2id): #broken = [path1, path2,...] (path1 = [(t1),(t2),...]), gold_ids, golden_ent_ids
     broken = list()
     golden_ids = set()
     golden_ents = set()  
