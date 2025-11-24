@@ -2,6 +2,7 @@ import json
 from datasets import load_dataset
 from tqdm import tqdm
 import pickle
+import argparse
 
 def make_total_graph(dataset):
     # dataset = 'cwq'
@@ -30,6 +31,11 @@ def make_total_graph(dataset):
 
     with open(f'/data/{dataset}/total_graph_{dataset}.jsonl', 'w', encoding='utf-8') as file:
         json.dump(final_list, file)
+    
+    triple2id = {trip : i for i, trip in enumerate(temp_list)}
+
+    with open(f'/data/{dataset}{dataset}_triple2id.pkl', 'wb') as f:
+        pickle.dump(triple2id,f)
 
 
 
@@ -78,18 +84,22 @@ def make_topic2graph(dataset):
 
     topic2graph = {k : list(v) for k, v in topic2graph.items()}
 
-    with open(f'/data/{dataset}/{dataset}_triple2id.json', 'rb') as f:
+    with open(f'/data/{dataset}/{dataset}_triple2id.pkl', 'rb') as f:
         triple2id = pickle.load(f)
 
-    cwq_graph = dict()
+    new_graph = dict()
     for k, v in topic2graph.items():
-        if k not in cwq_graph:
-            cwq_graph[k] = list()
-        cwq_graph[k] += [triple2id[triplet] for triplet in v]
+        if k not in new_graph:
+            new_graph[k] = list()
+        new_graph[k] += [triple2id[triplet] for triplet in v]
         
-    with open(f'/data/{dataset}/{dataset}_topic_graph.pickle', mode='wb') as f:
-        pickle.dump(cwq_graph, f)
+    with open(f'/data/{dataset}/{dataset}_topic_graph.pkl', mode='wb') as f:
+        pickle.dump(new_graph, f)
 
-dataset = 'cwq'
-make_total_graph(dataset)
-make_topic2graph(dataset)
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--dataset", type=str, default='webqsp')
+args, unknown = parser.parse_known_args()
+
+make_total_graph(args.dataset)
+make_topic2graph(args.dataset)
