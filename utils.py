@@ -238,13 +238,13 @@ def get_relation_graph(triples):
 def get_dataset(dataset_name, split):
     dataset = load_dataset(f"rmanluo/RoG-{dataset_name}", split=split)
     graph = []
-    file_path = f'/data/graphs/total_graph_{dataset_name}.jsonl'
+    file_path = f'/data/{dataset_name}/total_graph_{dataset_name}.jsonl'
     with open(file_path, 'r') as file:
         for line in file:
             data = json.loads(line)
             graph.append(data)
     max_iter = 3 if dataset_name == 'cwq' else 1
-    with open(f'/data/graphs/{dataset_name}_triple2id.pkl', 'rb') as f:
+    with open(f'/data/{dataset_name}/{dataset_name}_triple2id.pkl', 'rb') as f:
         triple2id = pickle.load(f)
     id2triple = {v : k for k, v in triple2id.items()}
     
