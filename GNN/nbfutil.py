@@ -5,10 +5,7 @@ import os
 from .nbfvariadic import *
 
 def get_rel_emb(temp, dataset): 
-    if dataset == 'webqsp':
-        relemb_path = 'data/webqsp/relation.pth'
-    else:
-        relemb_path = 'data/cwq/relation.pth'
+    relemb_path = 'data/{dataset}/relation.pth'
     rel_emb = torch.load(relemb_path)
     rel2id = temp['rel2id']
     rels = list(rel2id.keys())
