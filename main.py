@@ -27,8 +27,8 @@ if __name__ == '__main__':
     parser.add_argument("--return_entity_threshold", type=int, default=20)
     parser.add_argument("--return_entity_min_threshold", type=int, default=10)
 
-    parser.add_argument("--webqsp_subgraph_path", type=str, default='./data/graphs/webqsp_topic_graph.pickle')
-    parser.add_argument("--cwq_subgraph_path", type=str, default='./data/graphs/cwq_topic_graph_updated.pickle')
+    parser.add_argument("--webqsp_subgraph_path", type=str, default='./data/webqsp/webqsp_topic_graph.pkl')
+    parser.add_argument("--cwq_subgraph_path", type=str, default='./data/cwq/cwq_topic_graph.pkl')
     parser.add_argument("--gnn_path", type = str, default = './ckpt/GNN')
     parser.add_argument("--lm_path", type=str, default = './ckpt/mpnet')
     parser.add_argument("--rel_ranker_path", type=str, default = './ckpt/sbert')
@@ -58,20 +58,17 @@ if __name__ == '__main__':
     predictor = LMPredictor(GNN_device)
     text_encoder = GTELargeEN(GNN_device)
     
-    
-    if args.dataset == 'webqsp':
+    if  == 'webqsp':
         with open(args.webqsp_subgraph_path, 'rb') as f:
             topic_graphs= pickle.load(f)
         gnn_model = GNNRetriever(entity_model=QueryNBFNet(input_dim=512, hidden_dims=[512, 512, 512]), rel_emb_dim=1024)
-        predictor.load_model(ckt_path= f'{args.lm_path}/webqsp.mdl')
     else:
         with open(args.cwq_subgraph_path, 'rb') as f:
             topic_graphs= pickle.load(f)
         gnn_model = GNNRetriever(entity_model=QueryNBFNet(input_dim=512, hidden_dims=[512, 512, 512, 512, 512, 512]), rel_emb_dim=1024)
-        predictor.load_model(ckt_path= f'{args.lm_path}/cwq.mdl')
-
     
-    state = torch.load(f'{args.gnn_path}/{args.dataset}/GNN.pth', map_location="cpu")
+    predictor.load_model(ckt_path= f'{args.lm_path}/{args.dataset}.mdl')
+    state = torch.load(f'{args.gnn_path}/{args.dataset}_GNN.pth', map_location="cpu")
     gnn_model.load_state_dict(state["model"])
     gnn_model.to(GNN_device)
    
