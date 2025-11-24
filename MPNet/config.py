@@ -23,11 +23,11 @@ parser.add_argument('--lr', type=float, default=2e-5, #satkgc=2e-5
 parser.add_argument('--weight_decay', type=float, default=1e-4,
                         help='weight decay')
 parser.add_argument('--train_path', default='./data/webqsp/train_goldenpath.jsonl')
-parser.add_argument('--train_graph_path', default='./data/webqsp/total_graph_webqsp.json')
+parser.add_argument('--train_graph_path', default='./data/webqsp/total_graph_webqsp.jsonl')
 parser.add_argument('--train_path2', default='./data/cwq/train_goldenpath.jsonl')
-parser.add_argument('--train_graph_path2', default='./data/cwq/total_graph_cwq.json')
-parser.add_argument('--triple2id_1', default="./data/webqsp/webqsp_triple2id.json")
-parser.add_argument('--triple2id_2', default="./data/cwq/cwq_triple2id.pickle")
+parser.add_argument('--train_graph_path2', default='./data/cwq/total_graph_cwq.jsonl')
+parser.add_argument('--triple2id_1', default="./data/webqsp/webqsp_triple2id.pkl")
+parser.add_argument('--triple2id_2', default="./data/cwq/cwq_triple2id.pkl")
 parser.add_argument('--rel2id_path', default="./data/cwq/rel2id.pkl")
 parser.add_argument('--batch_size', type=int, default=512)
 parser.add_argument('-p', '--print-freq', default=50, type=int,
