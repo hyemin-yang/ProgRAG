@@ -58,7 +58,7 @@ if __name__ == '__main__':
     predictor = LMPredictor(GNN_device)
     text_encoder = GTELargeEN(GNN_device)
     
-    if  == 'webqsp':
+    if args.dataset == 'webqsp':
         with open(args.webqsp_subgraph_path, 'rb') as f:
             topic_graphs= pickle.load(f)
         gnn_model = GNNRetriever(entity_model=QueryNBFNet(input_dim=512, hidden_dims=[512, 512, 512]), rel_emb_dim=1024)
