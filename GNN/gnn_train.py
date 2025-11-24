@@ -132,38 +132,32 @@ with open(f'/data/{dataset_name}/{dataset_name}_triple2id.pkl', 'rb') as f:
 id2triple = {v : k for k, v in triple2id.items()}
 
 if not is_test:
-    with open(f'/data/{dataset_name}/small_subgraph.pkl', 'rb') as f:
-        output= pickle.load(f)
-
     train_data = load_dataset(f"rmanluo/RoG-{dataset_name}", split='train')
     train_datasets = dict()
 
     for i, item in tqdm(enumerate(train_data), total=len(train_data)):
         good = 0
-        if item['id'] in output:
-            q_entitys = item['q_entity']
-            for q_ent in q_entitys:
-                if q_ent[0] not in ['g', 'm'] and q_ent[1] != '.':
-                    good += 1
-                    
-            if good == len(q_entitys):
-                # graph = output[item['id']]
-                graph = item['graph']
-                if len(graph) != 0:
-                    target_entity_list = item['a_entity']
-                    kg_data = make_gfm_first_input(graph, id2triple)
-                    kg_data['rel_emb'] = get_rel_emb(kg_data, dataset_name)
-                    reasoning_path = q_entitys[0]
-                    question_dataset = make_gfm_second_input(item['question'], reasoning_path, q_entitys, target_entity_list, text_encoder, kg_data)
-                    if sum(question_dataset['supporting_entities_masks'][0]).item() != 0:
-                        train_datasets[i] = {"data": question_dataset, "graph": kg_data}
+        q_entitys = item['q_entity']
+        for q_ent in q_entitys:
+            if q_ent[0] not in ['g', 'm'] and q_ent[1] != '.':
+                good += 1
+                
+        if good == len(q_entitys):
+            graph = item['graph']
+            if len(graph) != 0:
+                target_entity_list = item['a_entity']
+                kg_data = make_gfm_first_input(graph, id2triple)
+                kg_data['rel_emb'] = get_rel_emb(kg_data, dataset_name)
+                reasoning_path = q_entitys[0]
+                question_dataset = make_gfm_second_input(item['question'], reasoning_path, q_entitys, target_entity_list, text_encoder, kg_data)
+                if sum(question_dataset['supporting_entities_masks'][0]).item() != 0:
+                    train_datasets[i] = {"data": question_dataset, "graph": kg_data}
                 
     valid_data = load_dataset(f"rmanluo/RoG-{dataset_name}", split='validation')
     valid_datasets = dict()
     for i, item in tqdm(enumerate(valid_data), total=len(valid_data)):
         for q_entity in item['q_entity']:
             if q_entity[0] not in ['g', 'm'] and q_entity[1] != '.':
-                # graph = output[q_entity]
                 graph = item['graph']
                 target_entity_list = item['a_entity']
                 kg_data = make_gfm_first_input(graph, id2triple)
@@ -180,7 +174,7 @@ if not is_test:
         model = GNNRetriever(entity_model=QueryNBFNet(input_dim=512, hidden_dims=[512, 512, 512, 512, 512, 512]), rel_emb_dim=rel_emb)
     
     if load_model:
-        pretrained_dict = torch.load(f"/data/{dataset_name}/model_best.pth", map_location="cpu")
+        pretrained_dict = torch.load(f"./ckpt/GNN/{dataset_name}_GNN.pth", map_location="cpu")
         new_model_dict = model.state_dict()
         pretrained_dict = {k: v for k, v in pretrained_dict["model"].items() if k in new_model_dict}
         new_model_dict.update(pretrained_dict)
@@ -278,7 +272,7 @@ if not is_test:
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
             }
-        torch.save(state, os.path.join(f"/data/{dataset_name}/mode_state_{i}.pth"))
+        # torch.save(state, os.path.join(f"./ckpt/GNN/{dataset_name}_GNN.pth"))
         synchronize()
         torch.cuda.empty_cache()
         all_avg_mrr, all_avg_hit1, all_avg_hit2, all_avg_hit3,\
@@ -294,7 +288,7 @@ if not is_test:
                 "model": model.state_dict(),
                 "optimizer": optimizer.state_dict(),
             }
-            torch.save(state, os.path.join(f"/data/{dataset_name}/model_best.pth"))
+            torch.save(state, os.path.join(f"./ckpt/GNN/{dataset_name}_GNN.pth"))
             print('updating')
         scheduler.step()
         torch.cuda.empty_cache()
