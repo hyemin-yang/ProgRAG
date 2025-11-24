@@ -33,12 +33,40 @@ pip install "sentence-transformers[train]==3.0.1" datasets==2.14.7
 
 ## 2) Download Datasets and Checkpoints
 To run experiments, download the required Knowledge Graph datasets and checkpoints for:
-- Relation Retriever
+- Relation Retriever : sbert
 - Triple Retriever : GNN, MPNet
   
 You can download all necessary files from the following Google Drive link:
 https://drive.google.com/drive/folders/1BVvQRNTaLdONEeFauZfxPYQXQSpCVuNm?usp=drive_link
 
+### 📂 Directory Structure After Download
+
+After downloading, the files should be placed as follows:
+```
+data/
+└── webqsp/
+    ├── total_graph_webqsp.jsonl
+    ├── webqsp_topic_graph.pkl
+    ├── train_goldenpath.jsonl
+    └── webqsp_triple2id.pkl
+└── cwq/
+    ├── total_graph_cwq.jsonl
+    ├── cwq_topic_graph.pkl
+    ├── train_goldenpath.jsonl
+    └── cwq_triple2id.pkl
+
+ckpt/
+├── GNN/
+│   ├── webqsp/
+│   │   └── GNN.pth
+│   └── cwq/
+│       └── GNN.pth
+├── mpnet/
+│   ├── webqsp.mdl
+│   └── cwq.mdl
+└── sbert/
+```
+  
 Alternatively, you can preprocess the datasets using the following commands:
 ```
 python3 graph_preprocess.py
