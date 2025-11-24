@@ -155,7 +155,7 @@ def main(args):
     else:
         raise NotImplementedError(text_encoder_name)
     
-    emb_save_dir = f'dataset/{args.dataset}/emb'
+    emb_save_dir = f'data/{args.dataset}'
     get_emb_graph(graph[0], text_encoder, os.path.join(emb_save_dir, 'relation.pth'))
 
 if __name__ == '__main__':
