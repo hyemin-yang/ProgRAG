@@ -48,11 +48,13 @@ data/
     ├── total_graph_webqsp.jsonl
     ├── webqsp_topic_graph.pkl
     ├── train_goldenpath.jsonl
+    ├── relation.pth
     └── webqsp_triple2id.pkl
 └── cwq/
     ├── total_graph_cwq.jsonl
     ├── cwq_topic_graph.pkl
     ├── train_goldenpath.jsonl
+    ├── relation.pth
     └── cwq_triple2id.pkl
 
 ckpt/
