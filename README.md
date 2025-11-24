@@ -57,10 +57,8 @@ data/
 
 ckpt/
 ├── GNN/
-│   ├── webqsp/
-│   │   └── GNN.pth
-│   └── cwq/
-│       └── GNN.pth
+│   ├── webqsp_GNN.pth
+│   └── webqsp_GNN.pth
 ├── mpnet/
 │   ├── webqsp.mdl
 │   └── cwq.mdl
