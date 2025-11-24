@@ -244,14 +244,10 @@ def get_dataset(dataset_name, split):
             data = json.loads(line)
             graph.append(data)
     max_iter = 3 if dataset_name == 'cwq' else 1
-    if dataset_name == 'webqsp':
-        with open(f'/data/graphs/{dataset_name}_triple2id.pkl', 'rb') as f:
-            triple2id = pickle.load(f)
-    else:
-        with open(f'/data/graphs/{dataset_name}_triple2id.pickle', 'rb') as f:
-            triple2id = pickle.load(f)
-
+    with open(f'/data/graphs/{dataset_name}_triple2id.pkl', 'rb') as f:
+        triple2id = pickle.load(f)
     id2triple = {v : k for k, v in triple2id.items()}
+    
     return dataset, graph[0],  max_iter, id2triple, triple2id
 
 def get_en_qu_dict(en_qu_dict, total_original_q):
@@ -288,7 +284,9 @@ def write_log(outpath, dataset, inds, original_q, cand_ent_list, relation_list, 
         json_str = json.dumps(line)
         outfile.write(json_str + "\n")
         outfile.close()
+        
     return hit, f1
+    
 class toybox:
     def __init__(self):
         self.ent_box = list()
@@ -334,21 +332,6 @@ def get_each_rel_end(cand_path, retrieved_rel, mpnet_rel_ent_dict, gnn_rel_ent_d
                             ents.add(triple[-1])
                     ents = ents - set(writer.ent_box)
                     gnn_rel_ent_dict[relation] = list(ents)
-    
-
-def checking_breakup(graph, q_entity, a_entity):
-    q_cnt = 0
-    a_cnt = 0
-    for t in graph:
-        if len(set(t) & set(a_entity)) != 0:
-            q_cnt += 1
-        if len(set(t) & set(q_entity)) != 0:
-            a_cnt += 1
-            
-    if q_cnt == 0 or a_cnt == 0:
-        return False
-    
-    return True
 
 def path_to_string(path):
     result = ""
@@ -475,6 +458,7 @@ def mpnet_topp(sorted_scores, sorted_triples, top_p, min_entity, max_entity):
         topp_list = topp_list[:max_entity]
         topp_scores = topp_scores[:max_entity]
     topp_scores = F.softmax(torch.tensor(topp_scores), dim=0).detach().cpu().numpy()
+    
     return topp_list, topp_scores
 
 
