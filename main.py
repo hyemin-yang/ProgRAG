@@ -341,7 +341,6 @@ if __name__ == '__main__':
                             except:
                                 retrieved_rel = ["None"]
                             if retrieved_rel != ["None"]:
-                                retrieved_rel = [item.strip() for item in retrieved_rel.split(',')]
                                 checking = 'reset'
 
                         elif len(cand_rel) > 0:
