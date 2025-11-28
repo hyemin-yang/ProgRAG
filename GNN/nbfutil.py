@@ -5,7 +5,7 @@ import os
 from .nbfvariadic import *
 
 def get_rel_emb(temp, dataset): 
-    relemb_path = 'data/{dataset}/relation.pth'
+    relemb_path = f'data/{dataset}/relation.pth'
     rel_emb = torch.load(relemb_path)
     rel2id = temp['rel2id']
     rels = list(rel2id.keys())
