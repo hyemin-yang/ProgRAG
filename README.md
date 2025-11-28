@@ -17,7 +17,7 @@ conda activate ProgRAG
 conda install pytorch==2.2.1 torchvision==0.17.1 torchaudio==2.2.1 pytorch-cuda=11.8 -c pytorch -c nvidia
 
 # 3. Install PyTorch Geometric and related packages
-pip install torch-scatter==latest+cu118 torch-sparse==latest+cu118 torch-cluster==latest+cu118 torch-spline-conv==latest+cu118 -f https://data.pyg.org/whl/torch-2.2.1+cu118.html
+pip install torch-scatter==2.1.1 torch-sparse==0.6.17 torch-cluster==1.6.1 torch-spline-conv==1.2.1 -f https://data.pyg.org/whl/torch-2.2.1+cu118.html
 pip install torch-geometric==2.3.0
 
 # 4. Install additional dependencies
