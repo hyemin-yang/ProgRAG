@@ -546,7 +546,7 @@ def get_first_big_div_Q(model, topic_box, total_original_q, dataset):
 
 
 def get_ans_temp(model, sub_Q):
-    input_text = REVISED_ANSWER_TEMPLATE.format(Q=sub_Q)
+    input_text = ANSWER_TEMPLATE.format(Q=sub_Q)
     
     out_form = model.llm_call(input_text, 10, task='template', printing=True)
     
