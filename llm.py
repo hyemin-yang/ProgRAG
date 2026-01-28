@@ -45,7 +45,7 @@ class LLM(nn.Module):
                     text = [item.strip() for item in text.split(',')]
 
         else:
-            self.outputs, _ = ask_gpt4(input_text, self.args)
+            self.outputs = ask_gpt4(input_text, self.args)
             if task in ['template', 'subcheck', 'subcheck1']:
                 if self.outputs.startswith('```python'):
                     match = re.search(r'\[.*?\]', self.outputs)
