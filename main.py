@@ -329,7 +329,6 @@ if __name__ == '__main__':
                             writer.add_all(all_subqs, set_box, topic_ent)
                             break
                     else:
-                        check_backtrack_cnt += 1
                         if iter == args.local_iter:
                             break
                         rel_ent_dict = dict()
